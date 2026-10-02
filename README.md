@@ -50,15 +50,18 @@ Le workflow n8n contient ces deux parties.
 
 ## Ingestion : préparer le document
 
+**Branche principale**, une fois par document :
+
 ```mermaid
 flowchart LR
-  A[PDF déposé] --> B[Extraction du texte]
-  B --> C[Nettoyage]
-  C --> D[Découpage en fenêtres glissantes]
-  D --> E{{Pour chaque morceau}}
-  E --> F[Enrichissement par Gemini]
-  F --> G[Embedding]
-  G --> H[(Supabase pgvector)]
+  A[PDF déposé] --> B[Extraction] --> C[Nettoyage] --> D[Découpage]
+```
+
+**Branche de stockage**, une fois par morceau :
+
+```mermaid
+flowchart LR
+  E[Morceau] --> F[Enrichissement] --> G[Embedding] --> H[(Supabase)]
 ```
 
 | Étape | Nœud n8n | Rôle |
@@ -79,12 +82,7 @@ rapprochent le vocabulaire du document de celui des utilisateurs.
 
 ```mermaid
 flowchart LR
-  Q[Question] --> C[Context]
-  C --> R[Routing]
-  R --> S[Search]
-  S --> K[Reranking]
-  K --> G[Generation]
-  G --> A[Réponse avec pages]
+  C[Context] --> R[Routing] --> S[Search] --> K[Reranking] --> G[Generation]
   S <--> DB[(Supabase)]
 ```
 
