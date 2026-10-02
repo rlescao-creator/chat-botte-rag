@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Chat Botté · Insiders Dossier</title>
+<title>Chat Botté</title>
 <link rel="icon" href="avatar.jpg">
 <style>
   :root {
@@ -168,7 +168,7 @@
     <img id="avatar" src="avatar.jpg" alt="Chat Botté">
     <div>
       <h1>Chat Botté 🐾</h1>
-      <p>Un chat qui a lu <em>The Insider's Dossier</em>. Posez votre question, il fouille le livre et cite les pages.</p>
+      <p>Posez votre question. Il fouille les documents chargés et cite les pages.</p>
     </div>
   </header>
 
@@ -184,9 +184,9 @@
 <script>
   const WEBHOOK_URL = 'https://rubsss.app.n8n.cloud/webhook/493cd307-0fe8-4b92-a876-16565594c088/chat';
   const SUGGESTIONS = [
-    "Quels types d'initiés donnent les meilleurs signaux d'achat ?",
-    "Qu'est-ce qu'un Form 4 ?",
-    "Pourquoi un achat groupé est-il un signal plus fort ?",
+    "De quoi parlent les documents ?",
+    "Quelles sont les idées principales ?",
+    "Quels sont les termes clés à retenir ?",
   ];
 
   const messages = document.getElementById('messages');
@@ -254,7 +254,7 @@
   const ask = async (question) => {
     document.querySelector('.banner').classList.add('small');
     addMessage('user', '<p>' + escapeHtml(question) + '</p>');
-    const pending = addMessage('bot', '<p class="typing">Le chat fouille dans le livre… 🐾</p>');
+    const pending = addMessage('bot', '<p class="typing">Le chat fouille dans les documents… 🐾</p>');
     send.disabled = true;
     input.disabled = true;
     try {
@@ -301,7 +301,7 @@
   });
 
   // Welcome message with clickable example questions
-  const welcome = addMessage('bot', '<p>Miaou ! J\'ai lu <em>The Insider\'s Dossier</em> en entier, entre deux siestes. Demandez moi ce que vous voulez :</p><div class="suggestions"></div>');
+  const welcome = addMessage('bot', '<p>Miaou ! J\'ai lu tous les documents qu\'on m\'a confiés, entre deux siestes. Demandez moi ce que vous voulez :</p><div class="suggestions"></div>');
   const box = welcome.querySelector('.suggestions');
   for (const suggestion of SUGGESTIONS) {
     const button = document.createElement('button');
