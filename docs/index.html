@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Insiders Dossier · Chatbot RAG</title>
+<style>
+  :root {
+    --bg: #f6f5f1;
+    --panel: #ffffff;
+    --ink: #1c1b19;
+    --muted: #6d6a63;
+    --line: #e2dfd6;
+    --accent: #1f5f4a;
+    --accent-ink: #ffffff;
+    --user: #e8f1ed;
+    --error: #a3341f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141513;
+      --panel: #1d1f1c;
+      --ink: #ecebe6;
+      --muted: #9a978f;
+      --line: #30332e;
+      --accent: #5fbf9c;
+      --accent-ink: #0f1a16;
+      --user: #23332c;
+      --error: #f08a73;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    justify-content: center;
+  }
+  .app {
+    width: 100%;
+    max-width: 760px;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    padding: 0 16px;
+  }
+  header {
+    padding: 20px 0 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  header h1 { margin: 0; font-size: 1.15rem; letter-spacing: -0.01em; }
+  header p { margin: 4px 0 0; color: var(--muted); font-size: 0.9rem; }
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .msg {
+    max-width: 88%;
+    padding: 11px 14px;
+    border-radius: 14px;
+    overflow-wrap: anywhere;
+  }
+  .msg.bot { background: var(--panel); border: 1px solid var(--line); align-self: flex-start; }
+  .msg.user { background: var(--user); align-self: flex-end; }
+  .msg.error { color: var(--error); border-color: var(--error); }
+  .msg p { margin: 0 0 8px; }
+  .msg p:last-child, .msg ul:last-child { margin-bottom: 0; }
+  .msg ul { margin: 0 0 8px; padding-left: 20px; }
+  .msg li { margin: 2px 0; }
+  .typing { color: var(--muted); font-style: italic; }
+  .suggestions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .suggestions button {
+    font: inherit;
+    font-size: 0.88rem;
+    color: var(--ink);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 6px 12px;
+    cursor: pointer;
+  }
+  .suggestions button:hover { border-color: var(--accent); }
+  form {
+    display: flex;
+    gap: 8px;
+    padding: 12px 0 18px;
+    border-top: 1px solid var(--line);
+  }
+  textarea {
+    flex: 1;
+    font: inherit;
+    color: var(--ink);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px 12px;
+    resize: none;
+    min-height: 46px;
+    max-height: 140px;
+  }
+  textarea:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  form button {
+    font: inherit;
+    font-weight: 600;
+    color: var(--accent-ink);
+    background: var(--accent);
+    border: 0;
+    border-radius: 12px;
+    padding: 0 18px;
+    cursor: pointer;
+  }
+  form button:disabled { opacity: 0.5; cursor: default; }
+  footer { color: var(--muted); font-size: 0.78rem; padding-bottom: 12px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Insiders Dossier · Chatbot RAG</h1>
+    <p>Posez une question sur le livre. La réponse s'appuie sur les passages retrouvés et cite les pages.</p>
+  </header>
+
+  <div id="messages" aria-live="polite"></div>
+
+  <form id="form">
+    <textarea id="input" rows="1" placeholder="Votre question…" aria-label="Votre question" required></textarea>
+    <button id="send" type="submit">Envoyer</button>
+  </form>
+  <footer>Recherche hybride, reranking et génération. Une réponse prend environ vingt secondes.</footer>
+</div>
+
+<script>
+  const WEBHOOK_URL = 'https://rubsss.app.n8n.cloud/webhook/493cd307-0fe8-4b92-a876-16565594c088/chat';
+  const SUGGESTIONS = [
+    "Quels types d'initiés donnent les meilleurs signaux d'achat ?",
+    "Qu'est-ce qu'un Form 4 ?",
+    "Pourquoi un achat groupé est-il un signal plus fort ?",
+  ];
+
+  const messages = document.getElementById('messages');
+  const form = document.getElementById('form');
+  const input = document.getElementById('input');
+  const send = document.getElementById('send');
+
+  // One session per browser tab, so follow-up questions keep their context
+  let sessionId = sessionStorage.getItem('sessionId');
+  if (!sessionId) {
+    sessionId = 'web-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2));
+    sessionStorage.setItem('sessionId', sessionId);
+  }
+
+  const escapeHtml = (text) =>
+    text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  // Minimal Markdown: paragraphs, bullet lists, bold and italic
+  const renderMarkdown = (text) => {
+    const inline = (line) =>
+      escapeHtml(line)
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>');
+    const blocks = [];
+    let list = null;
+    for (const raw of text.split('\n')) {
+      const line = raw.trim();
+      const bullet = line.match(/^(?:[*\-•]|\d+\.)\s+(.*)$/);
+      if (bullet) {
+        if (!list) { list = []; blocks.push(list); }
+        list.push(inline(bullet[1]));
+      } else {
+        list = null;
+        if (line.length > 0) blocks.push(inline(line));
+      }
+    }
+    return blocks
+      .map((block) => Array.isArray(block) ? '<ul>' + block.map((item) => '<li>' + item + '</li>').join('') + '</ul>' : '<p>' + block + '</p>')
+      .join('');
+  };
+
+  const addMessage = (role, html, extraClass) => {
+    const node = document.createElement('div');
+    node.className = 'msg ' + role + (extraClass ? ' ' + extraClass : '');
+    node.innerHTML = html;
+    messages.appendChild(node);
+    messages.scrollTop = messages.scrollHeight;
+    return node;
+  };
+
+  const ask = async (question) => {
+    addMessage('user', '<p>' + escapeHtml(question) + '</p>');
+    const pending = addMessage('bot', '<p class="typing">Recherche dans le livre…</p>');
+    send.disabled = true;
+    input.disabled = true;
+    try {
+      const response = await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'sendMessage', sessionId, chatInput: question }),
+      });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const data = await response.json();
+      const answer = data.output || data.text || '';
+      if (!answer) throw new Error('Réponse vide');
+      pending.innerHTML = renderMarkdown(answer);
+    } catch (error) {
+      pending.classList.add('error');
+      pending.innerHTML = '<p>La réponse n\'a pas pu être obtenue (' + escapeHtml(String(error.message)) + '). Réessayez dans un instant.</p>';
+    } finally {
+      send.disabled = false;
+      input.disabled = false;
+      input.focus();
+      messages.scrollTop = messages.scrollHeight;
+    }
+  };
+
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const question = input.value.trim();
+    if (!question) return;
+    input.value = '';
+    input.style.height = 'auto';
+    ask(question);
+  });
+
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      form.requestSubmit();
+    }
+  });
+
+  input.addEventListener('input', () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 140) + 'px';
+  });
+
+  // Welcome message with clickable example questions
+  const welcome = addMessage('bot', '<p>Bonjour. Je réponds aux questions sur <em>The Insider\'s Dossier</em>. Quelques exemples :</p><div class="suggestions"></div>');
+  const box = welcome.querySelector('.suggestions');
+  for (const suggestion of SUGGESTIONS) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = suggestion;
+    button.addEventListener('click', () => { if (!send.disabled) ask(suggestion); });
+    box.appendChild(button);
+  }
+  input.focus();
+</script>
+</body>
+</html>
