@@ -111,7 +111,7 @@ continue avec la question d'origine et l'ordre de la recherche.
 | Workflow en code | [`n8ncli`](https://www.npmjs.com/package/@workflows-accelerator/n8n-cli), fichiers TypeScript |
 | Base vectorielle | Supabase (Postgres avec pgvector) |
 | Embeddings | Gemini `gemini-embedding-001`, 3072 dimensions |
-| Modèles | Gemini Flash Lite |
+| Modèles | Gemini Flash pour le routage et la rédaction, Gemini Flash Lite pour l'enrichissement et le reranking |
 | Interface | Page HTML statique, sans dépendance, sur GitHub Pages |
 
 ## Structure du dépôt
