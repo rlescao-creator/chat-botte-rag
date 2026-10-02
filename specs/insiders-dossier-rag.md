@@ -1,7 +1,7 @@
-# Insiders Dossier RAG
+# Spec : Insiders Dossier RAG
 
-Spec du workflow n8n `Insiders Dossier RAG` (ID `pyNBw6XbD5faF0Zm`).
-Fichier source : `n8n/workflows/Insiders Dossier RAG.workflow.ts`.
+Spec du workflow n8n `Insiders Dossier RAG`.
+Fichier source : [`n8n/workflows/Insiders Dossier RAG.workflow.ts`](../n8n/workflows/Insiders%20Dossier%20RAG.workflow.ts).
 
 ## Objectif
 
@@ -10,169 +10,172 @@ rédigée, appuyée uniquement sur le contenu du document, avec les pages citée
 
 ## Contexte
 
-- Instance n8n Cloud, gérée avec `n8ncli`. Accès par MCP uniquement : pas de
-  clé REST API, pas d'accès direct à la base n8n.
-- Base Supabase (organisation « N8N RAG ») avec pgvector.
-- Modèles fournis par les crédits intégrés de n8n : OpenAI pour les embeddings, Gemini pour
-  le reste.
-- Premier document visé : un livre de 86 pages sur les transactions d'initiés.
+- Instance n8n Cloud, gérée avec `n8ncli`. Accès par MCP uniquement : pas de clé REST API.
+- Base Supabase avec pgvector.
+- Modèles et embeddings Gemini, avec une clé API personnelle.
+- Premier document : un livre de 86 pages sur les transactions d'initiés, en anglais.
 
 ## Périmètre
 
-- Inclus :
-  - Ingestion d'un PDF déposé dans un formulaire : extraction, nettoyage, découpage,
-    enrichissement, vectorisation, stockage.
-  - Réponse à une question par chat : contexte, routage, recherche hybride, reranking,
-    génération, sauvegarde de l'échange.
-- Exclu :
-  - PDF scannés sans couche de texte (pas d'OCR).
-  - Contenu des images et des tableaux.
-  - Remplacement automatique d'un document déjà ingéré.
-  - Graphe d'entités interrogeable : entités et relations restent des métadonnées par morceau.
-  - Publication du workflow et exposition publique du chat.
+**Inclus**
+- Ingestion d'un PDF : extraction, nettoyage, découpage, enrichissement, vectorisation, stockage.
+- Réponse à une question : contexte, routage, recherche hybride, reranking, génération,
+  sauvegarde de l'échange.
+- Une page web hébergée à part, qui interroge le workflow.
+
+**Exclu**
+- PDF scannés sans couche de texte (pas d'OCR).
+- Contenu des images et des tableaux.
+- Remplacement automatique d'un document déjà ingéré.
+- Graphe d'entités interrogeable : entités et relations restent des métadonnées par morceau.
 
 ## Architecture
 
 Un seul workflow, trois points d'entrée.
 
-### Ingestion (déclencheur `Upload Document`)
+| Déclencheur | Branche | Quand |
+|---|---|---|
+| `Upload Document` | Ingestion | Un PDF est déposé dans le formulaire. |
+| `Receive Chunk` | Stockage d'un morceau | Appelé par l'ingestion, une fois par morceau. |
+| `Chat Message` | Réponse | Une question arrive par le chat. |
+
+### Ingestion
 
 `Upload Document` → `Extract PDF Text` → `Clean Text` → `Recursive Rolling Chunks` →
-`Loop Over Chunk Batches` → `Enrich Chunk` → `Build Enriched Chunks` → `Embed One Chunk`
+`Embed One Chunk` → `Count Stored Chunks` → `Log Ingestion in Supabase`
 
-En fin de boucle : `Count Stored Chunks` → `Log Ingestion in Supabase`.
+### Stockage d'un morceau
 
-| Nœud | Rôle |
-|---|---|
-| Clean Text (Code) | Nettoie chaque page, puis recolle tout en un seul texte continu. Mémorise où commence chaque page. |
-| Recursive Rolling Chunks (Code) | Découpe récursive (paragraphe, ligne, phrase, virgule, mot), puis fenêtre glissante avec environ 200 caractères de recouvrement. |
-| Enrich Chunk (Gemini Flash) | Pour chaque morceau : contexte, trois questions hypothétiques, mots-clés, entités, relations. |
-| Build Enriched Chunks (Code) | Assemble le texte à vectoriser : contexte + passage + questions + mots-clés. |
-| Embed One Chunk | Appelle ce même workflow une fois par morceau. |
+`Receive Chunk` → `Enrich Chunk` → `Build Enriched Chunks` → `Store Chunk in Supabase`
 
-### Stockage d'un morceau (déclencheur `Receive Chunk`)
-
-`Receive Chunk` → `Store Chunk in Supabase` (avec `Embed Chunk`, `Chunk Loader`,
-`Keep Chunk Whole`).
-
-### Réponse (déclencheur `Chat Message`)
+### Réponse
 
 | Étape | Nœuds |
 |---|---|
 | Context | `Inputs` → `Get Session Messages` → `Empty Conversation` → `Format History` → `Load Document Catalog` |
-| Routing | `Route Question` (Gemini Flash) → `Build Search Queries` |
+| Routing | `Route Question` → `Build Search Queries` |
 | Search | `Vector Search` → `Keyword Search` → `Merge Search Results` |
-| Reranking | `Rerank Passages` (Gemini 2.5 Flash Lite) → `Select Top Passages` |
-| Generation | `Write Answer` (Gemini Flash) → `Save Conversation` → `Reply` |
+| Reranking | `Rerank Passages` → `Select Top Passages` |
+| Generation | `Write Answer` → `Save Conversation` → `Reply` |
 
-### Données (Supabase)
+### Données
 
 | Table | Contenu |
 |---|---|
-| `documents` | Un morceau par ligne : texte, métadonnées, vecteur de 1536 dimensions. |
+| `documents_gemini` | Un morceau par ligne : texte, métadonnées, vecteur de 3072 dimensions. |
 | `rag_sources` | Une ligne par ingestion : fichier, nombre de morceaux, date. |
 | `chat_messages` | Historique des échanges, par session. |
 
-Schémas : `supabase/rag_setup.sql` et `supabase/chat_messages.sql`.
+Schéma : [`supabase/schema.sql`](../supabase/schema.sql).
 
 ## Affirmations
 
-Chaque affirmation est vraie ou fausse une fois le travail terminé, et dit comment le vérifier.
+Chaque affirmation est vraie ou fausse, et dit comment le vérifier.
 
 ### Ingestion
 
-- A1. Un PDF texte déposé dans le formulaire produit des lignes dans `documents`, toutes avec
-  un vecteur non nul. — Vérification : `select count(*), count(embedding) from documents
-  where metadata->>'source' = '<fichier>'`.
-- A2. Un document de moins de 100 pages produit entre 10 et 100 morceaux. — Vérification :
-  même requête, le compte est dans l'intervalle.
-- A3. Deux morceaux consécutifs partagent du texte (recouvrement), et aucun passage du
-  document n'est absent. — Vérification : sortie de `Recursive Rolling Chunks`,
-  `charStart` du morceau n+1 inférieur ou égal à `charEnd` du morceau n.
-- A4. Le texte stocké est nettoyé : ni caractère de contrôle, ni caractère invisible, ni
-  ligne réduite à un numéro de page. — Vérification : sortie de `Clean Text`.
-- A5. Chaque morceau porte en métadonnées : `source`, `page`, `page_end`, `chunk_index`,
-  `context`, `questions`, `keywords`, `entities`, `relations`, `enriched`. — Vérification :
-  `select jsonb_object_keys(metadata) from documents limit 20`.
-- A6. Si Gemini échoue sur un morceau, ce morceau est quand même stocké, avec
-  `enriched = false`. — Vérification : `select count(*) from documents where
+- **A1.** Un PDF texte déposé produit des lignes dans `documents_gemini`, toutes avec un vecteur.
+  Vérification : `select count(*), count(embedding) from documents_gemini`.
+- **A2.** Un document de moins de 100 pages produit entre 10 et 100 morceaux.
+  Vérification : même requête, le compte est dans l'intervalle.
+- **A3.** Deux morceaux consécutifs partagent du texte, et aucun passage n'est absent.
+  Vérification : sortie de `Recursive Rolling Chunks`, `charStart` du morceau n+1 inférieur ou
+  égal à `charEnd` du morceau n.
+- **A4.** Le texte stocké est nettoyé : ni caractère de contrôle, ni ligne réduite à un numéro
+  de page. Vérification : sortie de `Clean Text`.
+- **A5.** Chaque morceau porte en métadonnées : `source`, `page`, `page_end`, `chunk_index`,
+  `context`, `questions`, `keywords`, `entities`, `relations`, `enriched`.
+  Vérification : `select distinct jsonb_object_keys(metadata) from documents_gemini`.
+- **A6.** Si le modèle échoue sur un morceau, ce morceau est quand même stocké, avec
+  `enriched = false`. Vérification : `select count(*) from documents_gemini where
   metadata->>'enriched' = 'false'`.
-- A7. Une ingestion terminée ajoute une ligne dans `rag_sources`. — Vérification :
-  `select * from rag_sources order by id desc limit 1`.
+- **A7.** Une ingestion terminée ajoute une ligne dans `rag_sources`.
+  Vérification : `select * from rag_sources order by id desc limit 1`.
 
 ### Réponse
 
-- A8. Une question en français sur le contenu reçoit une réponse en français qui cite des
-  pages. — Vérification : exécution manuelle du déclencheur `Chat Message`, sortie de `Reply`.
-- A9. Le routeur produit trois requêtes en anglais, des mots-clés et des filtres. —
+- **A8.** Une question en français reçoit une réponse en français qui cite des pages.
+  Vérification : sortie de `Reply`.
+- **A9.** Le routeur produit trois requêtes en anglais, des mots-clés et des filtres.
   Vérification : sortie de `Route Question`.
-- A10. Les candidats proviennent de la recherche vectorielle et de la recherche par
-  mots-clés. — Vérification : champ `foundBy` dans la sortie de `Select Top Passages`.
-- A11. Le reranker note les candidats, et seuls les mieux notés vont à la génération. —
+- **A10.** Les candidats proviennent de la recherche vectorielle et de la recherche par mots-clés.
+  Vérification : champ `foundBy` dans la sortie de `Select Top Passages`.
+- **A11.** Le reranker note les candidats, et seuls les mieux notés vont à la génération.
   Vérification : `reranked = true` et `rerankScore` renseigné dans `Select Top Passages`.
-- A12. Si le reranker échoue, la réponse sort quand même, à partir de l'ordre de recherche. —
+- **A12.** Si le reranker échoue, la réponse sort quand même.
   Vérification : `reranked = false` et une sortie non vide dans `Reply`.
-- A13. Chaque échange est enregistré dans `chat_messages`. — Vérification :
-  `select role, left(content, 40) from chat_messages order by id desc limit 2`.
-- A14. Une question de suivi (« et pour les ventes ? ») est reformulée en question autonome
-  grâce à l'historique de la session. — Vérification : deux questions à la suite dans le chat
-  n8n, puis champ `standalone_question` de `Route Question`.
-- A15. Une question hors sujet reçoit une réponse qui dit que l'information est absente, sans
-  invention. — Vérification : poser une question sans rapport avec le document.
+- **A13.** Chaque échange est enregistré dans `chat_messages`.
+  Vérification : `select role, left(content, 40) from chat_messages order by id desc limit 2`.
+- **A14.** Une question de suivi est reformulée en question autonome grâce à l'historique.
+  Vérification : deux questions à la suite dans la même session, puis champ
+  `standalone_question` de `Route Question`.
+- **A15.** Une question hors sujet reçoit une réponse qui dit que l'information est absente.
+  Vérification : poser une question sans rapport avec le document.
 
-## État des vérifications au 1er octobre 2026
+### Chatbot hébergé
+
+- **A16.** La page hébergée sur GitHub Pages obtient une réponse du workflow.
+  Vérification : poser une question depuis la page en ligne.
+
+## État des vérifications
+
+Au 2 octobre 2026.
 
 | Affirmation | État | Preuve ou raison |
 |---|---|---|
-| A8 | Vérifié | Exécutions 18, 19 et 20 : réponses en français avec pages. |
-| A9 | Vérifié | Exécution 18 : trois requêtes, six mots-clés, filtre sur le document. |
-| A10 | Vérifié | Exécution 18 : `foundBy` contient `vector` et `keyword`. |
-| A11 | Vérifié | Exécutions 18 et 20 : notes de 3 à 10, cinq passages retenus. |
-| A12 | Vérifié | Exécution 19 : modèle refusé, `Reply` a quand même répondu. |
-| A13 | Vérifié | Exécution 19 : `Save Conversation` a renvoyé un identifiant. |
-| A1 à A7 | Non vérifié dans n8n | La nouvelle ingestion n'a pas abouti, par manque de crédits IA sur l'instance d'essai. Le code de A2, A3 et A4 est validé en local sur le PDF : 83 morceaux, recouvrement moyen de 160 caractères, aucun trou. |
-| A14 | Non vérifié | L'outil de test ouvre une nouvelle session à chaque appel. |
+| A1 | Vérifié | 83 lignes, 83 vecteurs de 3072 dimensions. |
+| A2 | Vérifié | 83 morceaux pour 83 pages utiles. |
+| A3 | Vérifié en local | Code exécuté sur le PDF : recouvrement moyen de 160 caractères, aucun trou. Non recontrôlé sur la sortie n8n. |
+| A4 | Vérifié en local | Même réserve. |
+| A5 | Vérifié | Les dix clés sont présentes en base. `keywords` est bien un tableau. |
+| A6 | Vérifié | 11 morceaux stockés sans enrichissement, après refus du modèle pour limite de débit. |
+| A7 | Vérifié | Ligne écrite à la fin de l'ingestion. |
+| A8 | Vérifié | Plusieurs exécutions : réponses en français avec pages. |
+| A9 | Vérifié | Trois requêtes, six mots-clés, filtre sur le document. |
+| A10 | Vérifié | `foundBy` contient `vector` et `keyword`. |
+| A11 | Vérifié avec les anciens réglages | Notes de 3 à 10, cinq passages retenus. Non revérifié depuis le passage à la clé personnelle : les essais ont buté sur la limite de débit. |
+| A12 | Vérifié | Reranker en échec, `Reply` a quand même répondu. |
+| A13 | Vérifié | 18 messages enregistrés sur 9 sessions. |
+| A14 | Non vérifié | Aucune session ne compte plus d'un échange. |
 | A15 | Non vérifié | Pas encore testé. |
+| A16 | Vérifié | Question posée depuis la page en ligne, réponse reçue avec les pages. |
 
 ## Décisions prises
 
-- **Un seul workflow qui s'appelle lui-même**, plutôt qu'un sous-workflow séparé — demande
-  explicite. Alternative écartée : le workflow `Insiders Dossier Chunk Embedder`, qui existe
-  encore mais n'est plus appelé.
-- **Nettoyage par du code, pas par un modèle** — un modèle risquerait de reformuler le texte
-  source.
-- **Fenêtre glissante adaptative** : environ un morceau par page, borné entre 10 et 100 sous
-  100 pages — demande explicite. Au-delà de 100 pages, un morceau par page, sans plafond.
-- **Reranking par Gemini Flash Lite**, pas par Cohere — le seul reranker natif de n8n exige
-  un credential Cohere, absent. `gemini-3.1-flash-lite-preview` est refusé par les crédits
-  n8n ; `gemini-2.5-flash-lite` passe.
-- **Recherche hybride** : fusion par rang réciproque de la recherche vectorielle et du plein
-  texte Postgres.
-- **Embeddings OpenAI `text-embedding-3-small`** — changer de fournisseur imposerait de
-  modifier la table et de tout revectoriser.
-- **Modifications du workflow par le serveur MCP n8n**, pas par `n8ncli push` — sans clé
-  REST, `push` ne met à jour que le nom d'un workflow existant et annonce un succès.
+- **Un seul workflow qui s'appelle lui-même**, plutôt qu'un sous-workflow séparé.
+- **Pas de boucle par lots** : `Embed One Chunk` appelle la branche de stockage pour chaque
+  morceau. Contrepartie : le canevas n'affiche pas la progression pendant l'ingestion.
+- **Enrichissement dans la branche de stockage**, après `Receive Chunk`.
+- **Nettoyage par du code, pas par un modèle** : un modèle risquerait de reformuler le texte.
+- **Fenêtre glissante adaptative** : environ un morceau par page, entre 10 et 100 morceaux
+  sous 100 pages. Au-delà, un morceau par page, sans plafond.
+- **Reranking par un modèle Gemini**, pas par Cohere : le seul reranker natif de n8n exige un
+  credential Cohere.
+- **Recherche hybride** : fusion par rang réciproque des vecteurs et du plein texte Postgres.
+- **Embeddings Gemini** à la place d'OpenAI, après épuisement des crédits IA de l'instance
+  d'essai. Cela a imposé une nouvelle table, les vecteurs n'ayant pas la même taille.
+- **Relances automatiques** sur les appels au modèle, pour absorber les surcharges passagères.
+- **Modifications par le serveur MCP n8n**, pas par `n8ncli push` : sans clé REST, `push` ne
+  met à jour que le nom d'un workflow existant.
 
 ## Hypothèses et risques
 
-- **L'appel du workflow sur lui-même fonctionne sans publication.** Non confirmé. S'il est
-  faux, `Embed One Chunk` échoue et rien n'est stocké.
-- **Les crédits n8n supportent environ 83 appels Gemini et 83 embeddings par document.** Non
-  confirmé. Une ingestion précédente, avec un autre découpage, est restée bloquée onze minutes
-  sans rien écrire, par manque de crédits.
-- **`Extract PDF Text` renvoie une liste de textes, un par page.** Si n8n renvoie un seul
-  bloc, tous les morceaux seront marqués page 1.
-- **La base contient encore 178 morceaux de la première ingestion**, sans enrichissement. Les tests de réponse ont tourné sur ces morceaux.
-- **Un même fichier déposé deux fois est stocké deux fois.** Aucune protection.
-- **Réglages liés à ce livre** : requêtes et recherche plein texte en anglais, types d'entités
-  orientés finance. Un PDF en français ou d'un autre domaine sera moins bien servi.
-- **Le document source est sous droits d'auteur.** Il n'est pas distribué ici, et le chat
-  doit rester privé.
+- **Limite de débit de la clé API.** Une ingestion fait deux appels par morceau. Une clé
+  gratuite peut être limitée en cours de route, ce qui laisse des morceaux sans enrichissement
+  et met le reranking en repli.
+- **Webhook public.** L'adresse du chat est visible dans la page. N'importe qui peut interroger
+  le bot, ce qui consomme le quota de la clé et les exécutions n8n.
+- **Doublons.** Un même fichier déposé deux fois est stocké deux fois. Deux ingestions lancées
+  en parallèle se mélangent.
+- **Lancement manuel de `Receive Chunk`.** Il stocke une ligne vide de sens. Cette branche ne
+  doit être appelée que par l'ingestion.
+- **Réglages liés à l'anglais.** Requêtes et recherche plein texte en anglais. Un PDF dans une
+  autre langue sera moins bien servi.
+- **Document sous droits d'auteur.** Il n'est pas distribué ici. Le bot résume et cite des pages.
 
 ## Questions ouvertes
 
-- Faut-il rendre le workflow générique (langue détectée à l'ingestion, types d'entités
-  généraux) ? À décider par le propriétaire du projet.
-- Faut-il convertir le PDF en Markdown avant le découpage, pour couper sur les titres ? À décider par le propriétaire du projet.
-- Faut-il archiver le workflow `Insiders Dossier Chunk Embedder` ? À décider par le propriétaire du projet.
-- Faut-il garder `Load Document Catalog`, qui n'est pas sur le schéma du cours ? À décider par le propriétaire du projet.
+- Faut-il détecter la langue à l'ingestion pour rendre le workflow générique ?
+- Faut-il convertir le PDF en Markdown avant le découpage, pour couper sur les titres ?
+- Faut-il empêcher l'ingestion d'un fichier déjà présent ?
+- Faut-il restreindre les origines autorisées du webhook à la page du chatbot ?
