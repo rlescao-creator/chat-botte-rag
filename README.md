@@ -2,7 +2,7 @@
   <img src="docs/avatar.jpg" width="110" alt="Chat Botté">
 </p>
 
-<h1 align="center">Chat Botté</h1>
+<h1 align="center">Chat Botté RAG</h1>
 
 <p align="center">
   Un chatbot qui répond aux questions sur un PDF, en citant les pages.<br>
@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://rlescao-creator.github.io/n8n-rag-workflows/"><b>Essayer le chatbot</b></a>
+  <a href="https://rlescao-creator.github.io/chat-botte-rag/"><b>Essayer le chatbot</b></a>
 </p>
 
 ---
