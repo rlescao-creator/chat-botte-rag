@@ -7,55 +7,88 @@
 <link rel="icon" href="avatar.jpg">
 <style>
   :root {
-    --bg: #f6f5f1;
-    --panel: #ffffff;
-    --ink: #1c1b19;
-    --muted: #6d6a63;
-    --line: #e2dfd6;
-    --accent: #b2561b;
+    --glass: rgba(255, 248, 238, 0.88);
+    --panel: #fffaf3;
+    --ink: #2b1c0f;
+    --muted: #7b6550;
+    --line: rgba(122, 78, 34, 0.22);
+    --accent: #d2691e;
     --accent-ink: #ffffff;
-    --user: #f6e7d6;
+    --user: #ffdfbd;
     --error: #a3341f;
+    --veil: linear-gradient(rgba(255, 214, 170, 0.18), rgba(60, 90, 30, 0.28));
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #141513;
-      --panel: #1d1f1c;
-      --ink: #ecebe6;
-      --muted: #9a978f;
-      --line: #30332e;
-      --accent: #f0a55c;
-      --accent-ink: #1f1408;
-      --user: #3a2c1e;
+      --glass: rgba(30, 21, 14, 0.84);
+      --panel: #2b2017;
+      --ink: #f8ecdd;
+      --muted: #c7b099;
+      --line: rgba(255, 196, 140, 0.2);
+      --accent: #f39a45;
+      --accent-ink: #201305;
+      --user: #51361f;
       --error: #f08a73;
+      --veil: linear-gradient(rgba(20, 12, 6, 0.45), rgba(10, 20, 6, 0.6));
     }
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   body {
     margin: 0;
-    background: var(--bg);
     color: var(--ink);
     font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     display: flex;
     justify-content: center;
+    background-color: #b9762f;
+  }
+  /* Blurred copy of the picture as ambient backdrop */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: -40px;
+    z-index: -1;
+    background-image: var(--veil), url("background.jpg");
+    background-size: cover;
+    background-position: center;
+    filter: blur(22px);
   }
   .app {
-    width: 100%;
+    width: calc(100% - 24px);
     max-width: 760px;
-    height: 100dvh;
+    height: calc(100dvh - 24px);
+    margin: 12px;
     display: flex;
     flex-direction: column;
-    padding: 0 16px;
+    overflow: hidden;
+    background: var(--glass);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    -webkit-backdrop-filter: blur(14px) saturate(1.2);
+    backdrop-filter: blur(14px) saturate(1.2);
+    box-shadow: 0 18px 50px rgba(40, 20, 0, 0.35);
   }
+  /* The whole picture, never cropped */
+  .banner {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 38dvh;
+    object-fit: contain;
+    flex: none;
+    transition: max-height 0.4s ease;
+  }
+  /* Once the conversation starts, the picture shrinks to leave room for the answers */
+  .banner.small { max-height: 16dvh; object-fit: cover; object-position: 35% 40%; }
+  header, #messages, form, footer { margin: 0 18px; }
   header {
-    padding: 18px 0 14px;
+    padding: 12px 0 12px;
     border-bottom: 1px solid var(--line);
     display: flex;
     align-items: center;
     gap: 14px;
   }
-  header img { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; flex: none; }
+  header img { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; flex: none; border: 2px solid var(--accent); }
   header h1 { margin: 0; font-size: 1.15rem; letter-spacing: -0.01em; }
   header p { margin: 4px 0 0; color: var(--muted); font-size: 0.9rem; }
   #messages {
@@ -130,6 +163,7 @@
 </head>
 <body>
 <div class="app">
+  <img class="banner" src="background.jpg" alt="Le Chat Botté allongé dans l'herbe">
   <header>
     <img id="avatar" src="avatar.jpg" alt="Chat Botté">
     <div>
@@ -218,6 +252,7 @@
   };
 
   const ask = async (question) => {
+    document.querySelector('.banner').classList.add('small');
     addMessage('user', '<p>' + escapeHtml(question) + '</p>');
     const pending = addMessage('bot', '<p class="typing">Le chat fouille dans le livre… 🐾</p>');
     send.disabled = true;
