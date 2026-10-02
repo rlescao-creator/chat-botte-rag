@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Insiders Dossier · Chatbot RAG</title>
+<title>Le Chat Bot · Insiders Dossier</title>
+<link rel="icon" href="avatar.svg">
 <style>
   :root {
     --bg: #f6f5f1;
@@ -11,9 +12,9 @@
     --ink: #1c1b19;
     --muted: #6d6a63;
     --line: #e2dfd6;
-    --accent: #1f5f4a;
+    --accent: #b2561b;
     --accent-ink: #ffffff;
-    --user: #e8f1ed;
+    --user: #f6e7d6;
     --error: #a3341f;
   }
   @media (prefers-color-scheme: dark) {
@@ -23,9 +24,9 @@
       --ink: #ecebe6;
       --muted: #9a978f;
       --line: #30332e;
-      --accent: #5fbf9c;
-      --accent-ink: #0f1a16;
-      --user: #23332c;
+      --accent: #f0a55c;
+      --accent-ink: #1f1408;
+      --user: #3a2c1e;
       --error: #f08a73;
     }
   }
@@ -48,9 +49,13 @@
     padding: 0 16px;
   }
   header {
-    padding: 20px 0 14px;
+    padding: 18px 0 14px;
     border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    gap: 14px;
   }
+  header img { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; flex: none; }
   header h1 { margin: 0; font-size: 1.15rem; letter-spacing: -0.01em; }
   header p { margin: 4px 0 0; color: var(--muted); font-size: 0.9rem; }
   #messages {
@@ -67,7 +72,10 @@
     border-radius: 14px;
     overflow-wrap: anywhere;
   }
-  .msg.bot { background: var(--panel); border: 1px solid var(--line); align-self: flex-start; }
+  .msg.bot { background: var(--panel); border: 1px solid var(--line); }
+  .row { display: flex; align-items: flex-end; gap: 8px; align-self: flex-start; max-width: 92%; }
+  .row .msg { max-width: 100%; }
+  .row img { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex: none; }
   .msg.user { background: var(--user); align-self: flex-end; }
   .msg.error { color: var(--error); border-color: var(--error); }
   .msg p { margin: 0 0 8px; }
@@ -123,17 +131,20 @@
 <body>
 <div class="app">
   <header>
-    <h1>Insiders Dossier · Chatbot RAG</h1>
-    <p>Posez une question sur le livre. La réponse s'appuie sur les passages retrouvés et cite les pages.</p>
+    <img id="avatar" src="avatar.svg" alt="Le Chat Bot">
+    <div>
+      <h1>Le Chat Bot 🐾</h1>
+      <p>Un chat qui a lu <em>The Insider's Dossier</em>. Posez votre question, il fouille le livre et cite les pages.</p>
+    </div>
   </header>
 
   <div id="messages" aria-live="polite"></div>
 
   <form id="form">
-    <textarea id="input" rows="1" placeholder="Votre question…" aria-label="Votre question" required></textarea>
+    <textarea id="input" rows="1" placeholder="Miaou… votre question ?" aria-label="Votre question" required></textarea>
     <button id="send" type="submit">Envoyer</button>
   </form>
-  <footer>Recherche hybride, reranking et génération. Une réponse prend environ vingt secondes.</footer>
+  <footer>Recherche hybride, reranking et génération. Le chat met environ vingt secondes à répondre.</footer>
 </div>
 
 <script>
@@ -183,18 +194,32 @@
       .join('');
   };
 
+  const AVATAR = document.getElementById('avatar').getAttribute('src');
+
   const addMessage = (role, html, extraClass) => {
     const node = document.createElement('div');
     node.className = 'msg ' + role + (extraClass ? ' ' + extraClass : '');
     node.innerHTML = html;
-    messages.appendChild(node);
+    if (role === 'bot') {
+      // Bot messages get the cat avatar next to the bubble
+      const row = document.createElement('div');
+      row.className = 'row';
+      const face = document.createElement('img');
+      face.src = AVATAR;
+      face.alt = '';
+      row.appendChild(face);
+      row.appendChild(node);
+      messages.appendChild(row);
+    } else {
+      messages.appendChild(node);
+    }
     messages.scrollTop = messages.scrollHeight;
     return node;
   };
 
   const ask = async (question) => {
     addMessage('user', '<p>' + escapeHtml(question) + '</p>');
-    const pending = addMessage('bot', '<p class="typing">Recherche dans le livre…</p>');
+    const pending = addMessage('bot', '<p class="typing">Le chat fouille dans le livre… 🐾</p>');
     send.disabled = true;
     input.disabled = true;
     try {
@@ -210,7 +235,7 @@
       pending.innerHTML = renderMarkdown(answer);
     } catch (error) {
       pending.classList.add('error');
-      pending.innerHTML = '<p>La réponse n\'a pas pu être obtenue (' + escapeHtml(String(error.message)) + '). Réessayez dans un instant.</p>';
+      pending.innerHTML = '<p>Le chat a fait tomber la réponse (' + escapeHtml(String(error.message)) + '). Réessayez dans un instant.</p>';
     } finally {
       send.disabled = false;
       input.disabled = false;
@@ -241,7 +266,7 @@
   });
 
   // Welcome message with clickable example questions
-  const welcome = addMessage('bot', '<p>Bonjour. Je réponds aux questions sur <em>The Insider\'s Dossier</em>. Quelques exemples :</p><div class="suggestions"></div>');
+  const welcome = addMessage('bot', '<p>Miaou ! J\'ai lu <em>The Insider\'s Dossier</em> en entier, entre deux siestes. Demandez moi ce que vous voulez :</p><div class="suggestions"></div>');
   const box = welcome.querySelector('.suggestions');
   for (const suggestion of SUGGESTIONS) {
     const button = document.createElement('button');

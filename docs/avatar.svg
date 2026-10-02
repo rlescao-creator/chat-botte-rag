@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Chat">
+  <circle cx="60" cy="60" r="60" fill="#f2c98a"/>
+  <path d="M22 50 L28 14 L54 36 Z" fill="#3b3430"/>
+  <path d="M98 50 L92 14 L66 36 Z" fill="#3b3430"/>
+  <path d="M29 42 L32 24 L45 36 Z" fill="#e9a5a0"/>
+  <path d="M91 42 L88 24 L75 36 Z" fill="#e9a5a0"/>
+  <ellipse cx="60" cy="68" rx="40" ry="35" fill="#3b3430"/>
+  <ellipse cx="44" cy="62" rx="8" ry="9.5" fill="#d8e36b"/>
+  <ellipse cx="76" cy="62" rx="8" ry="9.5" fill="#d8e36b"/>
+  <ellipse cx="44" cy="62" rx="2.6" ry="8" fill="#1c1b19"/>
+  <ellipse cx="76" cy="62" rx="2.6" ry="8" fill="#1c1b19"/>
+  <path d="M55 76 L65 76 L60 82 Z" fill="#e9a5a0"/>
+  <path d="M60 82 Q60 90 52 90 M60 82 Q60 90 68 90" fill="none" stroke="#f6f5f1" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M34 78 L12 73 M34 83 L12 86 M86 78 L108 73 M86 83 L108 86" stroke="#f6f5f1" stroke-width="1.8" stroke-linecap="round"/>
+</svg>
